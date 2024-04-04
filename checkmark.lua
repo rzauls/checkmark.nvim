@@ -109,17 +109,23 @@ local run_tests = function(bufnr, state, command)
 		end,
 
 		on_exit = function()
+			vim.print(state)
 			local failed = {}
 			for _, test in pairs(state.tests) do
 				if test.line then
 					if not test.success then
+						local message = "❌ fail"
+						if test.output then
+							message = table.concat({ message, "", table.unpack(test.output) }, "\n")
+							vim.print(message)
+						end
 						table.insert(failed, {
 							bufnr = state.bufnr,
 							lnum = test.line,
 							col = 0,
 							severity = vim.diagnostic.severity.ERROR,
 							source = "go-test",
-							message = "❌ fail",
+							message = message,
 							user_data = {},
 						})
 					end
