@@ -91,10 +91,12 @@ local run_tests = function(bufnr, state, command)
 
 					local test = state.tests[make_key(decoded)]
 					if test.success then
-						local text = { "✔️ pass" }
+						local text = { "✅ pass" }
 						if test.line then
 							vim.api.nvim_buf_set_extmark(state.bufnr, ns, test.line, 0, {
 								virt_text = { text },
+								-- TODO: figure out why highlight group doesnt work. maybe namespace issue?
+								hl_group = "comment",
 							})
 						end
 					end
