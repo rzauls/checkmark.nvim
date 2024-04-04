@@ -91,7 +91,7 @@ local run_tests = function(bufnr, state, command)
 
 					local test = state.tests[make_key(decoded)]
 					if test.success then
-						local text = { "✓" }
+						local text = { "✔️ pass" }
 						if test.line then
 							vim.api.nvim_buf_set_extmark(state.bufnr, ns, test.line, 0, {
 								virt_text = { text },
@@ -117,7 +117,7 @@ local run_tests = function(bufnr, state, command)
 							col = 0,
 							severity = vim.diagnostic.severity.ERROR,
 							source = "go-test",
-							message = "Test Failed",
+							message = "❌ fail",
 							user_data = {},
 						})
 					end
