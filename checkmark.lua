@@ -18,14 +18,15 @@ local test_function_query_string = [[
 )
 ]]
 
-local find_test_line = function(go_bufnr, name)
+-- TODO: fix this not finding non-main packages
+local find_test_line = function(bufnr, name)
 	local formatted = string.format(test_function_query_string, name)
 	local query = vim.treesitter.query.parse("go", formatted)
-	local parser = vim.treesitter.get_parser(go_bufnr, "go", {})
+	local parser = vim.treesitter.get_parser(bufnr, "go", {})
 	local tree = parser:parse()[1]
 	local root = tree:root()
 
-	for id, node in query:iter_captures(root, go_bufnr, 0, -1) do
+	for id, node in query:iter_captures(root, bufnr, 0, -1) do
 		if id == 1 then
 			local range = { node:range() }
 			return range[1]
@@ -34,8 +35,8 @@ local find_test_line = function(go_bufnr, name)
 end
 
 local make_key = function(entry)
-	assert(entry.Package, "Must have Package:" .. vim.inspect(entry))
-	assert(entry.Test, "Must have Test:" .. vim.inspect(entry))
+	assert(entry.Package, "must have Package:" .. vim.inspect(entry))
+	assert(entry.Test, "must have Test:" .. vim.inspect(entry))
 	return string.format("%s/%s", entry.Package, entry.Test)
 end
 
@@ -91,8 +92,15 @@ local append_to_parent_test = function(key, test, state)
 	end
 end
 
-local group = vim.api.nvim_create_augroup("checkmark.nvim-auto", { clear = true })
-local ns = vim.api.nvim_create_namespace("checkmark.nvim")
+-- returns group, ns pair
+-- TODO: learn how luadocs work and type them out
+local init_plugin_namespace = function()
+	return vim.api.nvim_create_augroup("checkmark.nvim-auto", { clear = true }),
+		vim.api.nvim_create_namespace("checkmark.nvim")
+end
+
+local group, ns = init_plugin_namespace()
+
 vim.diagnostic.config({
 	virtual_text = {
 		format = function(diagnostic)
@@ -217,5 +225,6 @@ local attach_to_buffer = function(bufnr, command)
 end
 
 vim.api.nvim_create_user_command("GoTestOnSave", function()
+	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
 	attach_to_buffer(vim.api.nvim_get_current_buf(), { "go", "test", "-v", "-json", [[./...]] })
 end, {})
