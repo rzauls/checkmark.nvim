@@ -36,7 +36,10 @@ end
 
 local make_key = function(entry)
 	assert(entry.Package, "must have Package:" .. vim.inspect(entry))
-	assert(entry.Test, "must have Test:" .. vim.inspect(entry))
+	if not entry.Test then
+		-- TODO: figure out when test-less package names are spit out by go test
+		return entry.Package
+	end
 	return string.format("%s/%s", entry.Package, entry.Test)
 end
 
@@ -54,7 +57,9 @@ local add_golang_output = function(state, entry)
 end
 
 local mark_success = function(state, entry)
-	state.tests[make_key(entry)].success = entry.Action == "pass"
+	if state.tests[make_key(entry)] then
+		state.tests[make_key(entry)].success = entry.Action == "pass"
+	end
 end
 
 local append_to_parent_test = function(key, test, state)
@@ -109,58 +114,67 @@ vim.diagnostic.config({
 	},
 }, ns)
 
-local run_tests = function(bufnr, state, command)
-	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+local run_tests = function(init_state, command)
+	vim.api.nvim_buf_clear_namespace(init_state.bufnr, ns, 0, -1)
 
 	-- initialize state since we are re-running tests
-	state = {
-		bufnr = tonumber(bufnr),
+	local state = {
+		bufnr = tonumber(init_state.bufnr),
 		tests = {},
 	}
 
 	vim.fn.jobstart(command, {
 		stdout_buffered = true,
 		on_stdout = function(_, data)
-			vim.print(vim.inspect(data))
 			if not data then
 				return
 			end
 
 			for _, line in ipairs(data) do
-				-- TODO: this decoding fails for some reason after 3rd json row or smth
-				local decoded = vim.json.decode(line)
-				if decoded.Action == "run" then
-					add_golang_test(state, decoded)
-				elseif decoded.Action == "output" then
-					if not decoded.Test then
-						return
-					end
-
-					add_golang_output(state, decoded)
-				elseif decoded.Action == "pass" or decoded.Action == "fail" then
-					mark_success(state, decoded)
-
-					local test = state.tests[make_key(decoded)]
-					if test.success then
-						local text = { "✅ pass" }
-						if test.line then
-							vim.api.nvim_buf_set_extmark(state.bufnr, ns, test.line, 0, {
-								virt_text = { text },
-								-- TODO: figure out why highlight group doesnt work. maybe namespace issue?
-								hl_group = "comment",
-							})
+				local ok, decoded = pcall(vim.json.decode, line)
+				if not ok then
+					vim.print("failed to decode line:", vim.inspect(line))
+					goto continue
+				elseif decoded then
+					if decoded.Action == "run" then
+						add_golang_test(state, decoded)
+					elseif decoded.Action == "output" then
+						-- some 'output' rows contain only metadata without references to any tests
+						if decoded.Test then
+							add_golang_output(state, decoded)
 						end
-					end
-				elseif decoded.Action == "pause" or decoded.Action == "cont" or decoded.Action == "start" then
+					elseif decoded.Action == "pass" or decoded.Action == "fail" then
+						mark_success(state, decoded)
+
+						local test = state.tests[make_key(decoded)]
+						if test then -- TODO: probabbly just shouldnt try to read non-test package entries
+							if test.success then
+								local text = { "✅ pass" }
+								if test.line then
+									vim.api.nvim_buf_set_extmark(state.bufnr, ns, test.line, 0, {
+										virt_text = { text },
+										-- TODO: figure out why highlight group doesnt work. maybe namespace issue?
+										hl_group = "comment",
+									})
+								end
+							end
+						end
+					elseif
+						decoded.Action == "pause"
+						or decoded.Action == "cont"
+						or decoded.Action == "skip"
+						or decoded.Action == "start"
+					then
 					-- Do nothing
-				else
-					error("failed to handle" .. vim.inspect(line))
+					else
+						error("failed to handle" .. vim.inspect(line))
+					end
 				end
+				::continue::
 			end
 		end,
 
 		on_exit = function()
-			vim.print(state)
 			local failed = {}
 			for key, test in pairs(state.tests) do
 				if test.line then
@@ -221,7 +235,7 @@ local attach_to_buffer = function(bufnr, command)
 		group = group,
 		pattern = "*.go",
 		callback = function()
-			state = run_tests(bufnr, state, command)
+			state = run_tests(state, command)
 		end,
 	})
 end
@@ -229,4 +243,11 @@ end
 vim.api.nvim_create_user_command("GoTestOnSave", function()
 	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
 	attach_to_buffer(vim.api.nvim_get_current_buf(), { "go", "test", "-v", "-json", [[./...]] })
+end, {})
+
+vim.api.nvim_create_user_command("GoTestCheckmarks", function()
+	run_tests({
+		bufnr = vim.api.nvim_get_current_buf(),
+		tests = {},
+	}, { "go", "test", "-v", "-json", [[./...]] })
 end, {})
