@@ -56,7 +56,16 @@ local mark_success = function(state, entry)
 	state.tests[make_key(entry)].success = entry.Action == "pass"
 end
 
-local ns = vim.api.nvim_create_namespace("live-tests")
+local ns = vim.api.nvim_create_namespace("checkmark.nvim")
+local ns_opts = {
+	virtual_text = {
+		format = function(diagnostic)
+			return diagnostic.user_data.short_message
+		end,
+	},
+}
+vim.diagnostic.config(ns_opts, ns)
+
 local group = vim.api.nvim_create_augroup("rihards-automagic", { clear = true })
 
 local run_tests = function(bufnr, state, command)
@@ -76,7 +85,6 @@ local run_tests = function(bufnr, state, command)
 			end
 
 			for _, line in ipairs(data) do
-				vim.print(line)
 				local decoded = vim.json.decode(line)
 				if decoded.Action == "run" then
 					add_golang_test(state, decoded)
@@ -103,7 +111,7 @@ local run_tests = function(bufnr, state, command)
 				elseif decoded.Action == "pause" or decoded.Action == "cont" or decoded.Action == "start" then
 					-- Do nothing
 				else
-					error("Failed to handle" .. vim.inspect(line))
+					error("failed to handle" .. vim.inspect(line))
 				end
 			end
 		end,
@@ -114,10 +122,9 @@ local run_tests = function(bufnr, state, command)
 			for _, test in pairs(state.tests) do
 				if test.line then
 					if not test.success then
-						local message = "❌ fail"
+						local message = ""
 						if test.output then
-							message = table.concat({ message, "", table.unpack(test.output) }, "\n")
-							vim.print(message)
+							message = table.concat(test.output, "\n")
 						end
 						table.insert(failed, {
 							bufnr = state.bufnr,
@@ -126,13 +133,16 @@ local run_tests = function(bufnr, state, command)
 							severity = vim.diagnostic.severity.ERROR,
 							source = "go-test",
 							message = message,
-							user_data = {},
+							user_data = {
+								test = test,
+								short_message = "❌ fail",
+							},
 						})
 					end
 				end
 			end
 
-			vim.diagnostic.set(ns, state.bufnr, failed, {})
+			vim.diagnostic.set(ns, state.bufnr, failed)
 		end,
 	})
 	return state
@@ -145,7 +155,6 @@ local attach_to_buffer = function(bufnr, command)
 	}
 
 	vim.api.nvim_buf_create_user_command(bufnr, "GoTestLineDiag", function()
-		vim.print("state when opening a diag window", state)
 		local line = vim.fn.line(".") - 1
 		for _, test in pairs(state.tests) do
 			if test.line == line then

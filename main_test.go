@@ -26,7 +26,7 @@ func Test_add(t *testing.T) {
 				a: 2,
 				b: 2,
 			},
-			want: 2,
+			want: 4,
 		},
 	}
 	for _, tt := range tests {
@@ -40,7 +40,7 @@ func Test_add(t *testing.T) {
 
 func Test_additionalTestGoesHere(t *testing.T) {
 	t.Run("something", func(t *testing.T) {
-		if got := add(1, 2); got != 3 {
+		if got := add(1, 2); got != 4 {
 			t.Errorf("add() = %v, want %v", got, 3)
 		}
 	})
