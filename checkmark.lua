@@ -56,17 +56,50 @@ local mark_success = function(state, entry)
 	state.tests[make_key(entry)].success = entry.Action == "pass"
 end
 
+local append_to_parent_test = function(key, test, state)
+	local part_count = 0
+	local parent_key = ""
+
+	-- build the <package>/<test-function-name> lookup key
+	for part in key:gmatch("[^/]+") do
+		if part_count == 2 then
+			break
+		end
+		if parent_key == "" then
+			parent_key = part
+		else
+			parent_key = table.concat({ parent_key, "/", part })
+		end
+		part_count = part_count + 1
+	end
+
+	-- look for <parent_key> in previous tests to find the diagnostic root
+	for pt_key, _ in pairs(state.tests) do
+		if parent_key == pt_key then
+			local existing_output = "-"
+			if type(state.tests[pt_key].output) == "string" then
+				existing_output = state.tests[pt_key].output -- in case there already are failed tests in this root tests
+			else
+				existing_output = table.unpack(state.tests[pt_key].output)
+			end
+			state.tests[pt_key].output = table.concat({
+				existing_output,
+				"",
+				table.unpack(test.output),
+			}, "\n")
+		end
+	end
+end
+
+local group = vim.api.nvim_create_augroup("checkmark.nvim-auto", { clear = true })
 local ns = vim.api.nvim_create_namespace("checkmark.nvim")
-local ns_opts = {
+vim.diagnostic.config({
 	virtual_text = {
 		format = function(diagnostic)
 			return diagnostic.user_data.short_message
 		end,
 	},
-}
-vim.diagnostic.config(ns_opts, ns)
-
-local group = vim.api.nvim_create_augroup("rihards-automagic", { clear = true })
+}, ns)
 
 local run_tests = function(bufnr, state, command)
 	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
@@ -119,12 +152,18 @@ local run_tests = function(bufnr, state, command)
 		on_exit = function()
 			vim.print(state)
 			local failed = {}
-			for _, test in pairs(state.tests) do
+			for key, test in pairs(state.tests) do
 				if test.line then
 					if not test.success then
 						local message = ""
 						if test.output then
-							message = table.concat(test.output, "\n")
+							if type(test.output) == "string" then
+								message = test.output
+							elseif type(test.output) == "table" then
+								message = table.concat(test.output, "\n")
+							else
+								error("some weird thing in test state" .. vim.inspect(test.output))
+							end
 						end
 						table.insert(failed, {
 							bufnr = state.bufnr,
@@ -138,6 +177,10 @@ local run_tests = function(bufnr, state, command)
 								short_message = "❌ fail",
 							},
 						})
+					end
+				else
+					if not test.success then
+						append_to_parent_test(key, test, state)
 					end
 				end
 			end
