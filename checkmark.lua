@@ -18,7 +18,6 @@ local test_function_query_string = [[
 )
 ]]
 
--- TODO: fix this not finding non-main packages
 local find_test_line = function(bufnr, name)
 	local formatted = string.format(test_function_query_string, name)
 	local query = vim.treesitter.query.parse("go", formatted)
@@ -52,8 +51,13 @@ local add_golang_test = function(state, entry)
 end
 
 local add_golang_output = function(state, entry)
+	-- TODO: group tests by package and rewrite this
 	assert(state.tests, vim.inspect(state))
-	table.insert(state.tests[make_key(entry)].output, vim.trim(entry.Output))
+	local key = make_key(entry)
+	state.tests[key] = vim.tbl_extend("force", state.tests[key], {
+		output = vim.trim(entry.Output),
+		package = vim.trim(entry.Package),
+	})
 end
 
 local mark_success = function(state, entry)
@@ -63,24 +67,21 @@ local mark_success = function(state, entry)
 end
 
 local append_to_parent_test = function(key, test, state)
-	local part_count = 0
-	local parent_key = ""
+	-- TODO: group tests by package and rewrite this
+	local parent_key = test.package
 
 	-- build the <package>/<test-function-name> lookup key
-	for part in key:gmatch("[^/]+") do
-		if part_count == 2 then
-			break
-		end
-		if parent_key == "" then
-			parent_key = part
-		else
-			parent_key = table.concat({ parent_key, "/", part })
-		end
-		part_count = part_count + 1
+	-- TODO: parent key needs 3 parts if the package is nested
+	for part in test.name:gmatch("[^/]+") do
+		parent_key = table.concat({ parent_key, part }, "/")
+		break
 	end
+
+	vim.print(string.format("build parent_key: %s for %s", parent_key, test.name))
 
 	-- look for <parent_key> in previous tests to find the diagnostic root
 	for pt_key, _ in pairs(state.tests) do
+		vim.print(string.format("test_key: %s parent_key: %s", parent_key, pt_key))
 		if parent_key == pt_key then
 			local existing_output = "-"
 			if type(state.tests[pt_key].output) == "string" then
@@ -88,13 +89,24 @@ local append_to_parent_test = function(key, test, state)
 			else
 				existing_output = table.unpack(state.tests[pt_key].output)
 			end
+
+			local existing_test_output = "-"
+			if type(test.output) == "string" then
+				existing_test_output = test.output -- in case there already are failed tests in this root tests
+			else
+				existing_test_output = table.unpack(test.output)
+			end
+
+			vim.print(string.format("appending %s output to %s", test.name, pt_key))
 			state.tests[pt_key].output = table.concat({
 				existing_output,
 				"",
-				table.unpack(test.output),
+				existing_test_output,
 			}, "\n")
+			return
 		end
 	end
+	vim.print("couldnd find parent", vim.inspect(test))
 end
 
 -- returns group, ns pair
@@ -137,6 +149,7 @@ local run_tests = function(init_state, command)
 					goto continue
 				elseif decoded then
 					if decoded.Action == "run" then
+						-- TODO: group tests by package and rewrite this
 						add_golang_test(state, decoded)
 					elseif decoded.Action == "output" then
 						-- some 'output' rows contain only metadata without references to any tests
@@ -209,6 +222,7 @@ local run_tests = function(init_state, command)
 				end
 			end
 
+			vim.print(vim.inspect(state))
 			vim.diagnostic.set(ns, state.bufnr, failed)
 		end,
 	})
