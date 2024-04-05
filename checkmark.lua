@@ -121,11 +121,13 @@ local run_tests = function(bufnr, state, command)
 	vim.fn.jobstart(command, {
 		stdout_buffered = true,
 		on_stdout = function(_, data)
+			vim.print(vim.inspect(data))
 			if not data then
 				return
 			end
 
 			for _, line in ipairs(data) do
+				-- TODO: this decoding fails for some reason after 3rd json row or smth
 				local decoded = vim.json.decode(line)
 				if decoded.Action == "run" then
 					add_golang_test(state, decoded)
