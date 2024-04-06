@@ -18,7 +18,41 @@ local test_function_query_string = [[
 )
 ]]
 
-local find_test_line = function(bufnr, name)
+-- TODO: figure out how to do modules so i can import this with lazy
+local M = {}
+
+-- TODO:: move these somewhere more fitting
+
+---@class cmTestCase
+---@field name string
+---@field package string
+---@field line number
+---@field output table
+---@field success boolean
+
+---@alias cmGoTestAction
+---| '"start"'
+---| '"run"'
+---| '"cont"'
+---| '"pause"'
+---| '"skip"'
+---| '"output"'
+---| '"pass"'
+---| '"fail"'
+
+---@class cmGoTestOutputRow
+---@field Test string?
+---@field Time string
+---@field Package string
+---@field Action cmGoTestAction
+---@field Output string?
+---@field Elapsed number?
+
+---@class cmState
+---@field tests table
+---@field bufnr number
+
+local function find_test_line(bufnr, name)
 	local formatted = string.format(test_function_query_string, name)
 	local query = vim.treesitter.query.parse("go", formatted)
 	local parser = vim.treesitter.get_parser(bufnr, "go", {})
@@ -33,7 +67,7 @@ local find_test_line = function(bufnr, name)
 	end
 end
 
-local make_key = function(entry)
+local function make_key(entry)
 	assert(entry.Package, "must have Package:" .. vim.inspect(entry))
 	if not entry.Test then
 		-- TODO: figure out when test-less package names are spit out by go test
@@ -42,7 +76,9 @@ local make_key = function(entry)
 	return string.format("%s/%s", entry.Package, entry.Test)
 end
 
-local add_golang_test = function(state, entry)
+---@param state cmState
+---@param entry cmGoTestOutputRow
+local function add_golang_test(state, entry)
 	state.tests[make_key(entry)] = {
 		name = entry.Test,
 		line = find_test_line(state.bufnr, entry.Test),
@@ -50,7 +86,9 @@ local add_golang_test = function(state, entry)
 	}
 end
 
-local add_golang_output = function(state, entry)
+---@param state cmState
+---@param entry cmGoTestOutputRow
+local function add_golang_output(state, entry)
 	-- TODO: group tests by package and rewrite this
 	assert(state.tests, vim.inspect(state))
 	local key = make_key(entry)
@@ -60,13 +98,18 @@ local add_golang_output = function(state, entry)
 	})
 end
 
-local mark_success = function(state, entry)
+---@param state cmState
+---@param entry cmGoTestOutputRow
+local function mark_success(state, entry)
 	if state.tests[make_key(entry)] then
 		state.tests[make_key(entry)].success = entry.Action == "pass"
 	end
 end
 
-local append_to_parent_test = function(key, test, state)
+---@param key string
+---@param test cmTestCase
+---@param state cmState
+local function append_to_parent_test(key, test, state)
 	-- TODO: group tests by package and rewrite this
 	local parent_key = test.package
 
@@ -83,16 +126,17 @@ local append_to_parent_test = function(key, test, state)
 	for pt_key, _ in pairs(state.tests) do
 		vim.print(string.format("test_key: %s parent_key: %s", parent_key, pt_key))
 		if parent_key == pt_key then
-			local existing_output = "-"
+			local existing_output
 			if type(state.tests[pt_key].output) == "string" then
 				existing_output = state.tests[pt_key].output -- in case there already are failed tests in this root tests
 			else
 				existing_output = table.unpack(state.tests[pt_key].output)
 			end
 
-			local existing_test_output = "-"
+			local existing_test_output
 			if type(test.output) == "string" then
-				existing_test_output = test.output -- in case there already are failed tests in this root tests
+				-- in case there already are failed tests in this root tests
+				existing_test_output = test.output
 			else
 				existing_test_output = table.unpack(test.output)
 			end
@@ -111,7 +155,7 @@ end
 
 -- returns group, ns pair
 -- TODO: learn how luadocs work and type them out
-local init_plugin_namespace = function()
+local function init_plugin_namespace()
 	return vim.api.nvim_create_augroup("checkmark.nvim-auto", { clear = true }),
 		vim.api.nvim_create_namespace("checkmark.nvim")
 end
@@ -126,7 +170,9 @@ vim.diagnostic.config({
 	},
 }, ns)
 
-local run_tests = function(init_state, command)
+---@param init_state cmState
+---@param command table
+local function run_tests(init_state, command)
 	vim.api.nvim_buf_clear_namespace(init_state.bufnr, ns, 0, -1)
 
 	-- initialize state since we are re-running tests
@@ -143,6 +189,7 @@ local run_tests = function(init_state, command)
 			end
 
 			for _, line in ipairs(data) do
+				---@type boolean, cmGoTestOutputRow
 				local ok, decoded = pcall(vim.json.decode, line)
 				if not ok then
 					vim.print("failed to decode line:", vim.inspect(line))
@@ -229,7 +276,7 @@ local run_tests = function(init_state, command)
 	return state
 end
 
-local attach_to_buffer = function(bufnr, command)
+local function attach_to_buffer(bufnr, command)
 	local state = {
 		bufnr = bufnr,
 		tests = {},
@@ -254,14 +301,24 @@ local attach_to_buffer = function(bufnr, command)
 	})
 end
 
-vim.api.nvim_create_user_command("GoTestOnSave", function()
+M.test_on_save = function()
 	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
 	attach_to_buffer(vim.api.nvim_get_current_buf(), { "go", "test", "-v", "-json", [[./...]] })
-end, {})
+end
 
-vim.api.nvim_create_user_command("GoTestCheckmarks", function()
+M.run_tests = function()
 	run_tests({
 		bufnr = vim.api.nvim_get_current_buf(),
 		tests = {},
 	}, { "go", "test", "-v", "-json", [[./...]] })
+end
+
+vim.api.nvim_create_user_command("GoTestOnSave", function()
+	M.test_on_save()
 end, {})
+
+vim.api.nvim_create_user_command("GoTestCheckmarks", function()
+	M.run_tests()
+end, {})
+
+return M
