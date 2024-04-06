@@ -1,10 +1,17 @@
 local treesitter = require("checkmark.treesitter")
 local config = require("checkmark.config")
+-- TODO:get plenary for logging
+-- local logger = require("checkmark.logger")
 
 local M = {}
+
+---@class cmSetupOpts Options available when initalizing the plugin
+---@field test string placeholder value, has no meaning
+
+---Configure and initialize the plugin
+---@param opts cmSetupOpts
 function M.setup(opts)
-	--TODO: do some setup-ing
-	M._config = config.get_default_values()
+	M.config = vim.tbl_deep_extend("force", config.get_default_values(), opts)
 end
 
 -- TODO:: move these somewhere more fitting
@@ -274,14 +281,14 @@ end
 
 M.test_on_save = function()
 	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
-	attach_to_buffer(vim.api.nvim_get_current_buf(), M._config.command)
+	attach_to_buffer(vim.api.nvim_get_current_buf(), M.config.command)
 end
 
 M.run_tests = function()
 	run_tests({
 		bufnr = vim.api.nvim_get_current_buf(),
 		tests = {},
-	}, M._config.command)
+	}, M.config.command)
 end
 
 vim.api.nvim_create_user_command("GoTestOnSave", function()
