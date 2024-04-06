@@ -4,7 +4,6 @@ local config = require("checkmark.config")
 local M = {}
 function M.setup(opts)
 	--TODO: do some setup-ing
-	print("called setup with opts", vim.inspect(opts))
 	M._config = config.get_default_values()
 end
 
