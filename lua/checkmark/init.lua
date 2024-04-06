@@ -12,6 +12,7 @@ local M = {}
 ---@param opts cmSetupOpts
 function M.setup(opts)
 	M.config = vim.tbl_deep_extend("force", config.get_default_values(), opts)
+	treesitter.set_language(M.config.language)
 end
 
 -- TODO:: move these somewhere more fitting
