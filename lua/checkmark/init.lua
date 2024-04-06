@@ -289,6 +289,7 @@ M.test_on_save = function()
 end
 
 M.run_tests = function()
+	-- TODO: this breaks if the vim cwd isnt a module root (for golang)
 	run_tests({
 		bufnr = vim.api.nvim_get_current_buf(),
 		tests = {},
