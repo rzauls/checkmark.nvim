@@ -39,24 +39,23 @@ M.queries = {
 
 ---Get treesitter query string for a language, if it exists
 ---@package
----@return string
+---@return string|nil
 local function get_query_for_language(language)
 	for key, value in pairs(M.queries) do
 		if key == language then
 			return value
-		else
-			error(string.format("no query defined for '%s' language", language))
 		end
 	end
+	return nil
 end
 
 ---Set active language for the test lookup module
 ---@param language cmLanguage
 function M.set_language(language)
-	local ok, _ = pcall(get_query_for_language, language)
-	if not ok then
-		error("cannot set a language without defining a treesitter query first")
-	end
+	assert(
+		get_query_for_language(language),
+		string.format("cannot set a language (%s) without defining a treesitter query first", language)
+	)
 	M.language = language
 end
 
@@ -64,7 +63,10 @@ end
 ---@param language cmLanguage
 ---@param query string
 function M.add_language(language, query)
-	-- TODO: check if treesitter has a parser for the specified language
+	assert(
+		vim.treesitter.get_parser(0, language, {}),
+		"treesitter has no parser for provided language: " .. vim.inspect(language)
+	)
 	M.queries[language] = query
 end
 
@@ -73,7 +75,9 @@ end
 ---@param name string Test case name
 ---@return number|nil
 function M.find_test_line(bufnr, name)
-	local formatted = string.format(get_query_for_language(M.language), name)
+	local query_string = get_query_for_language(M.language)
+	assert(query_string, "no query for given language: " .. vim.inspect(M.language))
+	local formatted = string.format(query_string, name)
 	local query = vim.treesitter.query.parse(M.language, formatted)
 	local parser = vim.treesitter.get_parser(bufnr, M.language, {})
 	local tree = parser:parse()[1]
