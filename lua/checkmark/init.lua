@@ -168,6 +168,9 @@ local function run_tests(init_state, command)
 
 			for _, line in ipairs(data) do
 				---@type boolean, cmGoTestOutputRow
+				if line == "" then -- skip empty lines
+					goto continue
+				end
 				local ok, decoded = pcall(vim.json.decode, line)
 				if not ok then
 					vim.print("failed to decode line:", vim.inspect(line))
