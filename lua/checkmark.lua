@@ -1,24 +1,3 @@
--- -- TODO: write a proper plugin for this
-local test_function_query_string = [[
-(
- (function_declaration
-  name: (identifier) @name
-  parameters:
-    (parameter_list
-     (parameter_declaration
-      name: (identifier)
-      type: (pointer_type
-          (qualified_type
-           package: (package_identifier) @_package_name
-           name: (type_identifier) @_type_name)))))
-
- (#eq? @_package_name "testing")
- (#eq? @_type_name "T")
- (#eq? @name "%s")
-)
-]]
-
--- TODO: figure out how to do modules so i can import this with lazy
 local M = {}
 
 -- TODO:: move these somewhere more fitting
@@ -52,20 +31,8 @@ local M = {}
 ---@field tests table
 ---@field bufnr number
 
-local function find_test_line(bufnr, name)
-	local formatted = string.format(test_function_query_string, name)
-	local query = vim.treesitter.query.parse("go", formatted)
-	local parser = vim.treesitter.get_parser(bufnr, "go", {})
-	local tree = parser:parse()[1]
-	local root = tree:root()
-
-	for id, node in query:iter_captures(root, bufnr, 0, -1) do
-		if id == 1 then
-			local range = { node:range() }
-			return range[1]
-		end
-	end
-end
+local treesitter = require("checkmark.treesitter")
+local config = require("checkmark.config")
 
 local function make_key(entry)
 	assert(entry.Package, "must have Package:" .. vim.inspect(entry))
@@ -81,7 +48,7 @@ end
 local function add_golang_test(state, entry)
 	state.tests[make_key(entry)] = {
 		name = entry.Test,
-		line = find_test_line(state.bufnr, entry.Test),
+		line = treesitter.find_test_line(state.bufnr, entry.Test),
 		output = {},
 	}
 end
@@ -301,16 +268,18 @@ local function attach_to_buffer(bufnr, command)
 	})
 end
 
+local cfg = config.get_default_values()
+
 M.test_on_save = function()
 	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
-	attach_to_buffer(vim.api.nvim_get_current_buf(), { "go", "test", "-v", "-json", [[./...]] })
+	attach_to_buffer(vim.api.nvim_get_current_buf(), cfg.command)
 end
 
 M.run_tests = function()
 	run_tests({
 		bufnr = vim.api.nvim_get_current_buf(),
 		tests = {},
-	}, { "go", "test", "-v", "-json", [[./...]] })
+	}, cfg.command)
 end
 
 vim.api.nvim_create_user_command("GoTestOnSave", function()
