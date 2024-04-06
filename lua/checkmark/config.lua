@@ -1,12 +1,12 @@
 local M = {}
 
 ---checkmark.nvim configuration settings
----@class CheckmarkConfig
+---@class cmConfig
 ---@field command table<string>
 ---@field language cmLanguage
 
 ---Get default configuration values
----@return CheckmarkConfig
+---@return cmConfig
 function M.get_default_values()
 	return {
 		command = { "go", "test", "-v", "-json", [[./...]] },

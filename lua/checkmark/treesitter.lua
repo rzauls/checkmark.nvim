@@ -64,6 +64,7 @@ end
 ---@param language cmLanguage
 ---@param query string
 function M.add_language(language, query)
+	-- TODO: check if treesitter has a parser for the specified language
 	M.queries[language] = query
 end
 
