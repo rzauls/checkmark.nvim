@@ -1,4 +1,12 @@
+local treesitter = require("checkmark.treesitter")
+local config = require("checkmark.config")
+
 local M = {}
+function M.setup(opts)
+	--TODO: do some setup-ing
+	print("called setup with opts", vim.inspect(opts))
+	M._config = config.get_default_values()
+end
 
 -- TODO:: move these somewhere more fitting
 
@@ -30,9 +38,6 @@ local M = {}
 ---@class cmState
 ---@field tests table
 ---@field bufnr number
-
-local treesitter = require("checkmark.treesitter")
-local config = require("checkmark.config")
 
 local function make_key(entry)
 	assert(entry.Package, "must have Package:" .. vim.inspect(entry))
@@ -268,18 +273,16 @@ local function attach_to_buffer(bufnr, command)
 	})
 end
 
-local cfg = config.get_default_values()
-
 M.test_on_save = function()
 	init_plugin_namespace() -- init augroup (so it deletes the previous one also)
-	attach_to_buffer(vim.api.nvim_get_current_buf(), cfg.command)
+	attach_to_buffer(vim.api.nvim_get_current_buf(), M._config.command)
 end
 
 M.run_tests = function()
 	run_tests({
 		bufnr = vim.api.nvim_get_current_buf(),
 		tests = {},
-	}, cfg.command)
+	}, M._config.command)
 end
 
 vim.api.nvim_create_user_command("GoTestOnSave", function()
