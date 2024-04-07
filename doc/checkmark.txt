@@ -1,0 +1,32 @@
+================================================================================
+							      *checkmark.nvim*
+
+This plugin runs a test and puts checkmarks next to respective test cases.
+Currently supports only golang, but will potentially be expanded to allow
+other language implementations. See usage examples below:
+
+To configure the plugin, use the .setup({opts}) approach:
+							   *checkmark.setup()*
+checkmark.setup({opts})
+  Configure the plugin, using following options:
+    {opts.command}:
+        The command that is used to execute tests. Table of strings.
+
+        Default value: { "go", "test", "-v", "-json", "./..." }
+
+    {opts.log_lvl}:
+        Log level for internal logger. Uses |plenary.log| module
+
+						       *checkmark.run_tests()*
+checkmark.run_tests()
+  Runs tests for current file. In case of failed tests, the test output is
+  added to |vim.diagnostic| list. Can be run from command mode 
+  with <GoTestCheckmark>
+
+						    *checkmark.test_on_save()*
+checkmark.test_on_save()
+  Attaches an event listener, whenever the current file (buffer) is saved,
+  tests are re-run and checkmarks added where applicable. Can be run from
+  command mode with <GoTestOnSave>
+
+vim:tw=78:ts=8:ft=help:norl:

@@ -1,0 +1,4 @@
+checkmark.nvim	checkmark.txt	/*checkmark.nvim*
+checkmark.run_tests()	checkmark.txt	/*checkmark.run_tests()*
+checkmark.setup()	checkmark.txt	/*checkmark.setup()*
+checkmark.test_on_save()	checkmark.txt	/*checkmark.test_on_save()*
