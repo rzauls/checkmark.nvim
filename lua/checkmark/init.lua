@@ -6,7 +6,8 @@ local config = require("checkmark.config")
 local M = {}
 
 ---@class cmSetupOpts Options available when initalizing the plugin
----@field test string placeholder value, has no meaning
+---@field test? string placeholder value, has no meaning
+---@field command? table<string> override default command that gets executed when running tests
 
 ---Configure and initialize the plugin
 ---@param opts cmSetupOpts
@@ -214,6 +215,10 @@ local function run_tests(init_state, command)
 				end
 				::continue::
 			end
+		end,
+
+		on_stderr = function(_, data)
+			vim.print("failed to run tests: " .. vim.inspect(data))
 		end,
 
 		on_exit = function()
