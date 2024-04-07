@@ -1,19 +1,19 @@
 local treesitter = require("checkmark.treesitter")
 local config = require("checkmark.config")
--- TODO:get plenary for logging
--- local logger = require("checkmark.logger")
 
 local M = {}
 
 ---@class cmSetupOpts Options available when initalizing the plugin
----@field test? string placeholder value, has no meaning
+---@field log_lvl? string log msg level
 ---@field command? table<string> override default command that gets executed when running tests
 
 ---Configure and initialize the plugin
 ---@param opts cmSetupOpts
 function M.setup(opts)
 	M.config = vim.tbl_deep_extend("force", config.get_default_values(), opts)
+	M.logger = require("checkmark.log").new(M.config.log_lvl)
 	treesitter.set_language(M.config.language)
+	M.logger.debug("plugin successfully initialized")
 end
 
 -- TODO:: move these somewhere more fitting
@@ -136,6 +136,9 @@ end
 -- returns group, ns pair
 -- TODO: learn how luadocs work and type them out
 local function init_plugin_namespace()
+	if M.logger then
+		M.logger.debug("initialized namespaces and augroup")
+	end
 	return vim.api.nvim_create_augroup("checkmark.nvim-auto", { clear = true }),
 		vim.api.nvim_create_namespace("checkmark.nvim")
 end
@@ -153,6 +156,7 @@ vim.diagnostic.config({
 ---@param init_state cmState
 ---@param command table
 local function run_tests(init_state, command)
+	M.logger.debug("running tests: ", command)
 	vim.api.nvim_buf_clear_namespace(init_state.bufnr, ns, 0, -1)
 
 	-- initialize state since we are re-running tests
@@ -218,7 +222,7 @@ local function run_tests(init_state, command)
 		end,
 
 		on_stderr = function(_, data)
-			vim.print("failed to run tests: " .. vim.inspect(data))
+			M.logger.error("failed to run tests: " .. vim.inspect(data))
 		end,
 
 		on_exit = function()
@@ -256,8 +260,8 @@ local function run_tests(init_state, command)
 				end
 			end
 
-			vim.print(vim.inspect(state))
 			vim.diagnostic.set(ns, state.bufnr, failed)
+			M.logger.debug("on_exit state: " .. vim.inspect(state))
 		end,
 	})
 	return state
